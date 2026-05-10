@@ -130,6 +130,14 @@ tr:hover td{background:rgba(0,212,255,0.03);}
         <span class="nav-icon">📦</span> Stock & Días
         <span class="nav-badge" id="nb-stock">0</span>
       </div>
+      <div class="nav-item" data-pane="precios">
+        <span class="nav-icon">💰</span> Precios por Cuotas
+        <span class="nav-badge" id="nb-precios">0</span>
+      </div>
+      <div class="nav-item" data-pane="mlconn">
+        <span class="nav-icon">🔗</span> Conectar ML
+        <span class="nav-badge" id="nb-ml" style="background:rgba(239,68,68,.15);color:var(--red)">OFF</span>
+      </div>
     </div>
 
     <div class="sidebar-section">
@@ -173,6 +181,17 @@ tr:hover td{background:rgba(0,212,255,0.03);}
         <div class="config-note">Se usa cuando el producto no tiene peso/dimensiones cargados. Solo aplica si precio ≥ $33.000</div>
       </div>
 
+      <div class="config-block">
+        <label class="config-label">Comisión ML por cuotas</label>
+        <div class="config-row">
+          <div class="config-half"><label class="config-label" style="margin-top:4px">3 cuotas %</label><input class="config-input" type="number" id="cfg-c3" value="8.8" step="0.1"></div>
+          <div class="config-half"><label class="config-label" style="margin-top:4px">6 cuotas %</label><input class="config-input" type="number" id="cfg-c6" value="12.7" step="0.1"></div>
+        </div>
+        <div class="config-row">
+          <div class="config-half"><label class="config-label" style="margin-top:4px">9 cuotas %</label><input class="config-input" type="number" id="cfg-c9" value="15.9" step="0.1"></div>
+          <div class="config-half"><label class="config-label" style="margin-top:4px">12 cuotas %</label><input class="config-input" type="number" id="cfg-c12" value="19.3" step="0.1"></div>
+        </div>
+      </div>
       <button class="btn-save" id="btn-recalc">↻ Recalcular todo</button>
     </div>
   </div>
@@ -288,7 +307,70 @@ tr:hover td{background:rgba(0,212,255,0.03);}
         </div>
         <div class="pag" id="stock-pag"></div>
       </div>
+    <!-- PRECIOS POR CUOTAS -->
+    <div class="pane" id="pane-precios">
+      <div class="page-header">
+        <div class="page-title">Precios por <span>Cuotas</span></div>
+        <div class="page-sub">Precio sugerido por SKU para cada condición de venta sin perder margen</div>
+      </div>
+      <div id="precios-empty" class="empty">
+        <div class="empty-icon">💰</div>
+        <div class="empty-title">Cargá el CSV primero</div>
+      </div>
+      <div id="precios-content" style="display:none">
+        <div class="filter-bar">
+          <input class="filter-input filter-search" type="text" id="pf-search" placeholder="Buscar SKU...">
+          <select class="filter-input" id="pf-pm"><option value="">Todos los PMs</option></select>
+          <span class="filter-count" id="pf-count">0 SKUs</span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th>SKU</th><th>Título</th><th>PM</th>
+              <th>Precio Base</th><th>Margen Base</th>
+              <th>Sin cuotas</th>
+              <th>3 cuotas</th><th>Margen 3c</th>
+              <th>6 cuotas</th><th>Margen 6c</th>
+              <th>9 cuotas</th><th>Margen 9c</th>
+              <th>12 cuotas</th><th>Margen 12c</th>
+            </tr></thead>
+            <tbody id="precios-tbody"></tbody>
+          </table>
+        </div>
+        <div class="pag" id="precios-pag"></div>
+      </div>
     </div>
+
+    <!-- CONECTAR ML -->
+    <div class="pane" id="pane-mlconn">
+      <div class="page-header">
+        <div class="page-title">Conectar <span>Mercado Libre</span></div>
+        <div class="page-sub">Modificá precios directamente en ML desde Velkron</div>
+      </div>
+      <div class="card" style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:24px;max-width:500px;margin-bottom:20px">
+        <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:14px">Token de acceso ML</div>
+        <input type="password" id="ml-token-input" placeholder="APP_USR-..." style="width:100%;background:var(--surface);border:1px solid var(--border2);border-radius:7px;padding:9px 12px;color:var(--text);font-size:12px;font-family:'JetBrains Mono',monospace;margin-bottom:10px">
+        <div style="display:flex;gap:10px;align-items:center">
+          <button class="btn-save" style="width:auto;padding:9px 20px" id="btn-ml-connect">Conectar</button>
+          <span id="ml-conn-status" style="font-size:12px;color:var(--muted);font-family:'JetBrains Mono',monospace">No conectado</span>
+        </div>
+      </div>
+
+      <div id="ml-actions" style="display:none">
+        <div style="font-size:13px;font-weight:600;margin-bottom:14px;color:var(--text)">Modificar precios en ML</div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:16px">Seleccioná un SKU y el precio a enviar a ML</div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th>SKU</th><th>MLA</th><th>Precio actual ML</th>
+              <th>Precio base calc.</th><th>Nuevo precio</th><th>Acción</th>
+            </tr></thead>
+            <tbody id="ml-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
   </div>
 </div>
 
@@ -820,6 +902,336 @@ qs('btn-recalc').addEventListener('click',function(){
   PAGE_RENT=1;renderRentabilidad();renderStock();
   toast('Recalculado con nueva configuración');
 });
+
+
+// ── PRECIOS POR CUOTAS ────────────────────────────────────────
+var PAGE_PRECIOS = 1;
+
+function getCuotas() {
+  return {
+    c3:  parseFloat(qs('cfg-c3').value)  || 8.8,
+    c6:  parseFloat(qs('cfg-c6').value)  || 12.7,
+    c9:  parseFloat(qs('cfg-c9').value)  || 15.9,
+    c12: parseFloat(qs('cfg-c12').value) || 19.3,
+  };
+}
+
+function precioConCuotas(base, pct) {
+  return Math.round(base * (1 + pct/100));
+}
+
+function margenConCuotas(item, cfg, pctExtra) {
+  var itemCopy = Object.assign({}, item, { precioML: precioConCuotas(item.precioML, pctExtra) });
+  var c = calcMargen(itemCopy, cfg);
+  return c ? c.margen : null;
+}
+
+function getPreciosData() {
+  var srch = (qs('pf-search').value||'').toLowerCase();
+  var fPM  = qs('pf-pm').value||'';
+  return DATA.filter(function(item) {
+    if (!item.precioML) return false;
+    if (srch && !item.sku.toLowerCase().includes(srch) && !item.titulo.toLowerCase().includes(srch)) return false;
+    if (fPM && item.pm !== fPM) return false;
+    return true;
+  });
+}
+
+function renderPrecios() {
+  if (!DATA.length) return;
+  var cfg = getCfg();
+  var cuotas = getCuotas();
+  var rows = getPreciosData();
+
+  qs('pf-count').textContent = rows.length + ' SKUs';
+  qs('nb-precios').textContent = rows.length;
+
+  var pages = Math.ceil(rows.length/PAGE_SIZE)||1;
+  PAGE_PRECIOS = Math.min(PAGE_PRECIOS, pages);
+  var page = rows.slice((PAGE_PRECIOS-1)*PAGE_SIZE, PAGE_PRECIOS*PAGE_SIZE);
+
+  var tbody = qs('precios-tbody');
+  if (!page.length) {
+    tbody.innerHTML = '<tr><td colspan="14"><div class="empty"><div class="empty-title">Sin resultados</div></div></td></tr>';
+    return;
+  }
+
+  function mBadge(m) {
+    if (m === null) return '-';
+    var cls = m>=20?'mg-excelente':m>=10?'mg-bueno':m>=5?'mg-regular':m>=0?'mg-bajo':'mg-negativo';
+    return '<span class="margen-badge '+cls+'" style="font-size:10px">'+fmtPct(m)+'</span>';
+  }
+
+  tbody.innerHTML = page.map(function(item) {
+    var calcBase = calcMargen(item, cfg);
+    var mBase = calcBase ? calcBase.margen : null;
+
+    var p0  = item.precioML;
+    var p3  = precioConCuotas(p0, cuotas.c3);
+    var p6  = precioConCuotas(p0, cuotas.c6);
+    var p9  = precioConCuotas(p0, cuotas.c9);
+    var p12 = precioConCuotas(p0, cuotas.c12);
+
+    var m3  = margenConCuotas(item, cfg, cuotas.c3);
+    var m6  = margenConCuotas(item, cfg, cuotas.c6);
+    var m9  = margenConCuotas(item, cfg, cuotas.c9);
+    var m12 = margenConCuotas(item, cfg, cuotas.c12);
+
+    return '<tr>'
+      + '<td class="mono" style="font-size:10px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+item.sku+'</td>'
+      + '<td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px">'+item.titulo+'</td>'
+      + '<td style="font-size:11px;color:var(--accent)">'+item.pm+'</td>'
+      + '<td class="mono">'+fmtP(p0)+'</td>'
+      + '<td>'+mBadge(mBase)+'</td>'
+      + '<td class="mono" style="color:var(--text)">'+fmtP(p0)+'</td>'
+      + '<td class="mono">'+fmtP(p3)+'</td><td>'+mBadge(m3)+'</td>'
+      + '<td class="mono">'+fmtP(p6)+'</td><td>'+mBadge(m6)+'</td>'
+      + '<td class="mono">'+fmtP(p9)+'</td><td>'+mBadge(m9)+'</td>'
+      + '<td class="mono">'+fmtP(p12)+'</td><td>'+mBadge(m12)+'</td>'
+      + '</tr>';
+  }).join('');
+
+  renderPag('precios-pag', pages, rows.length, 'precios');
+}
+
+// ── ALERTAS STOCK MEJORADAS ───────────────────────────────────
+function getStockAlerta(item) {
+  var dias30 = diasStock(item.stock, item.v30);
+  if (dias30 === null) return 'sinventa';
+
+  var hoyMs = Date.now();
+  var tieneIngreso = item.cantIngreso > 0 && item.fechaIngreso;
+  var diasHastaIngreso = null;
+
+  if (tieneIngreso) {
+    var parts = item.fechaIngreso.split('/');
+    if (parts.length === 3) {
+      var fechaIngMs = new Date(parts[2], parts[1]-1, parts[0]).getTime();
+      diasHastaIngreso = Math.round((fechaIngMs - hoyMs) / 86400000);
+    }
+  }
+
+  if (dias30 < 15) {
+    if (!tieneIngreso) return 'critico-sin-compra';       // crítico y sin orden de compra
+    if (diasHastaIngreso !== null && diasHastaIngreso > dias30) return 'critico-llega-tarde'; // llega después del quiebre
+    return 'critico-ok';                                   // crítico pero llega a tiempo
+  }
+  if (dias30 < 30) {
+    if (!tieneIngreso) return 'alerta-sin-compra';
+    return 'alerta-ok';
+  }
+  return 'ok';
+}
+
+function alertaBadge(alerta, dias) {
+  switch(alerta) {
+    case 'critico-sin-compra':   return '<span class="margen-badge mg-negativo">🚨 '+dias+'d — Sin compra</span>';
+    case 'critico-llega-tarde':  return '<span class="margen-badge mg-negativo">⚠️ '+dias+'d — Ingreso tardío</span>';
+    case 'critico-ok':           return '<span class="margen-badge mg-regular">✓ '+dias+'d — Ingreso OK</span>';
+    case 'alerta-sin-compra':    return '<span class="margen-badge mg-regular">⚡ '+dias+'d — Sin compra</span>';
+    case 'alerta-ok':            return '<span class="margen-badge mg-bueno">⚡ '+dias+'d — Ingreso OK</span>';
+    case 'sinventa':             return '<span class="margen-badge" style="background:var(--border);color:var(--muted)">Sin ventas</span>';
+    default:                     return '<span class="margen-badge mg-excelente">✓ '+dias+'d</span>';
+  }
+}
+
+// ── ML CONEXIÓN ───────────────────────────────────────────────
+var ML_TOKEN = '';
+var ML_SELLER_ID = '';
+
+function setupML() {
+  qs('btn-ml-connect').addEventListener('click', async function() {
+    var token = qs('ml-token-input').value.trim();
+    if (!token) { toast('Ingresá el token', 'error'); return; }
+    qs('ml-conn-status').textContent = 'Conectando...';
+    try {
+      var r = await fetch('https://api.mercadolibre.com/users/me', {
+        headers: { 'Authorization': 'Bearer ' + token }
+      });
+      var d = await r.json();
+      if (d.id) {
+        ML_TOKEN = token;
+        ML_SELLER_ID = String(d.id);
+        qs('ml-conn-status').textContent = '✓ ' + (d.nickname || d.id);
+        qs('ml-conn-status').style.color = 'var(--green)';
+        qs('nb-ml').textContent = 'ON';
+        qs('nb-ml').style.background = 'rgba(16,185,129,.15)';
+        qs('nb-ml').style.color = 'var(--green)';
+        qs('ml-actions').style.display = 'block';
+        localStorage.setItem('vk_ml_token', token);
+        toast('ML conectado: ' + (d.nickname || d.id));
+        renderMLTable();
+      } else throw new Error(d.message || 'Error');
+    } catch(e) {
+      qs('ml-conn-status').textContent = '✗ Error: ' + e.message;
+      qs('ml-conn-status').style.color = 'var(--red)';
+      toast('Error ML: ' + e.message, 'error');
+    }
+  });
+
+  // Restore token
+  var saved = localStorage.getItem('vk_ml_token');
+  if (saved) qs('ml-token-input').value = saved;
+}
+
+function renderMLTable() {
+  if (!DATA.length || !ML_TOKEN) return;
+  var cfg = getCfg();
+  var tbody = qs('ml-tbody');
+  tbody.innerHTML = DATA.filter(function(i){ return i.precioML > 0; }).slice(0, 100).map(function(item) {
+    var calc = calcMargen(item, cfg);
+    var precioCalc = calc ? Math.round(item.precioML) : 0;
+    return '<tr>'
+      + '<td class="mono" style="font-size:10px">'+item.sku+'</td>'
+      + '<td class="mono" style="color:var(--muted)">—</td>'
+      + '<td class="mono">—</td>'
+      + '<td class="mono" style="color:var(--accent)">'+fmtP(precioCalc)+'</td>'
+      + '<td><input type="number" value="'+precioCalc+'" class="config-input vk-precio-input" data-sku="'+item.sku+'" style="width:100px;padding:4px 8px"></td>'
+      + '<td><button class="btn-save vk-update-btn" data-sku="'+item.sku+'" style="width:auto;padding:5px 12px;font-size:11px">Actualizar ML</button></td>'
+      + '</tr>';
+  }).join('');
+
+  tbody.querySelectorAll('.vk-update-btn').forEach(function(btn) {
+    btn.addEventListener('click', async function() {
+      var sku = btn.dataset.sku;
+      var row = btn.closest('tr');
+      var inp = row.querySelector('.vk-precio-input');
+      var precio = parseFloat(inp.value);
+      if (!precio) { toast('Precio inválido', 'error'); return; }
+      btn.disabled = true; btn.textContent = '...';
+      try {
+        // Necesita MLA — por ahora muestra mensaje
+        toast('Para modificar precios en ML necesitás cargar el CSV de publicaciones con el MLA de cada SKU', 'warning');
+        btn.textContent = 'Actualizar ML';
+        btn.disabled = false;
+      } catch(e) {
+        toast('Error: ' + e.message, 'error');
+        btn.disabled = false; btn.textContent = 'Actualizar ML';
+      }
+    });
+  });
+}
+
+// Override renderStock to use new alerta logic
+var _origRenderStock = renderStock;
+renderStock = function() {
+  if (!DATA.length) return;
+  var rows = getStockData();
+
+  // Update KPIs with new alerta categories
+  var counts = { critico:0, alerta:0, ok:0, sinventa:0 };
+  DATA.forEach(function(item) {
+    var d = diasStock(item.stock, item.v30);
+    var e = d===null?'sinventa':d<15?'critico':d<30?'alerta':'ok';
+    counts[e]++;
+  });
+  qs('sk-total').textContent = DATA.filter(function(i){ return i.stock>0; }).length;
+  qs('sk-crit').textContent = counts.critico;
+  qs('sk-warn').textContent = counts.alerta;
+  qs('sk-ok').textContent = counts.ok;
+  qs('sk-sinventa').textContent = counts.sinventa;
+  qs('sf-count').textContent = rows.length + ' SKUs';
+
+  var pages = Math.ceil(rows.length/PAGE_SIZE)||1;
+  PAGE_STOCK = Math.min(PAGE_STOCK, pages);
+  var page = rows.slice((PAGE_STOCK-1)*PAGE_SIZE, PAGE_STOCK*PAGE_SIZE);
+
+  var tbody = qs('stock-tbody');
+  if (!page.length) {
+    tbody.innerHTML = '<tr><td colspan="12"><div class="empty"><div class="empty-title">Sin resultados</div></div></td></tr>';
+    qs('stock-pag').innerHTML = ''; return;
+  }
+
+  tbody.innerHTML = page.map(function(r) {
+    var d180 = diasStock(r.item.stock, r.item.v180/6);
+    var alerta = getStockAlerta(r.item);
+    var estBadge = alertaBadge(alerta, r.dias);
+    return '<tr>'
+      + '<td class="mono" style="font-size:10px;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+r.item.sku+'</td>'
+      + '<td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px">'+r.item.titulo+'</td>'
+      + '<td class="mono" style="font-weight:700">'+fmtN(r.item.stock)+'</td>'
+      + '<td class="mono">'+r.item.v7+'</td>'
+      + '<td class="mono">'+r.item.v30+'</td>'
+      + '<td class="mono">'+r.item.v90+'</td>'
+      + '<td class="mono">'+r.item.v180+'</td>'
+      + '<td><span class="dias-chip '+diasClass(r.dias)+'">'+diasLabel(r.dias)+'</span></td>'
+      + '<td><span class="dias-chip '+diasClass(d180)+'">'+diasLabel(d180)+'</span></td>'
+      + '<td style="font-size:11px;color:var(--muted)">'+(r.item.fechaIngreso||'-')+'</td>'
+      + '<td class="mono">'+(r.item.cantIngreso?fmtN(r.item.cantIngreso):'-')+'</td>'
+      + '<td>'+estBadge+'</td>'
+      + '</tr>';
+  }).join('');
+
+  renderPag('stock-pag', pages, rows.length, 'stock');
+};
+
+// Patch renderPag to handle precios
+var _origRenderPag = renderPag;
+renderPag = function(id, pages, total, which) {
+  if (which === 'precios') {
+    var pag = qs(id);
+    if (!pag || pages <= 1) { if(pag) pag.innerHTML=''; return; }
+    var cur = PAGE_PRECIOS;
+    var html = '<span class="pag-info">'+total+' resultados</span>';
+    if (cur>1) html += '<button class="pag-btn" data-p="'+(cur-1)+'" data-w="precios">‹</button>';
+    for (var i=Math.max(1,cur-2); i<=Math.min(pages,cur+2); i++) {
+      html += '<button class="pag-btn'+(i===cur?' active':'')+'" data-p="'+i+'" data-w="precios">'+i+'</button>';
+    }
+    if (cur<pages) html += '<button class="pag-btn" data-p="'+(cur+1)+'" data-w="precios">›</button>';
+    pag.innerHTML = html;
+    pag.querySelectorAll('[data-p]').forEach(function(b) {
+      b.addEventListener('click', function() { PAGE_PRECIOS=parseInt(b.dataset.p); renderPrecios(); });
+    });
+    return;
+  }
+  _origRenderPag(id, pages, total, which);
+};
+
+// Patch loadCSV to also render new panes
+var _origLoadCSV = loadCSV;
+loadCSV = function(text) {
+  _origLoadCSV(text);
+  if (DATA.length) {
+    qs('precios-empty').style.display = 'none';
+    qs('precios-content').style.display = 'block';
+    // Populate PM filter for precios
+    var pms = [...new Set(DATA.map(function(i){ return i.pm; }).filter(Boolean))].sort();
+    var selPM = qs('pf-pm');
+    selPM.innerHTML = '<option value="">Todos los PMs</option>';
+    pms.forEach(function(pm){ var o=document.createElement('option');o.value=pm;o.textContent=pm;selPM.appendChild(o); });
+    qs('nb-precios').textContent = DATA.length;
+    PAGE_PRECIOS = 1;
+    renderPrecios();
+    if (ML_TOKEN) renderMLTable();
+  }
+};
+
+// Patch nav to include new panes
+document.querySelectorAll('.nav-item').forEach(function(item) {
+  item.addEventListener('click', function() {
+    document.querySelectorAll('.nav-item').forEach(function(x){ x.classList.remove('active'); });
+    document.querySelectorAll('.pane').forEach(function(x){ x.classList.remove('active'); });
+    item.classList.add('active');
+    qs('pane-'+item.dataset.pane).classList.add('active');
+  });
+});
+
+// Patch recalc to include precios
+var origRecalc = qs('btn-recalc');
+origRecalc.addEventListener('click', function() {
+  PAGE_RENT=1; PAGE_PRECIOS=1;
+  renderRentabilidad(); renderStock(); renderPrecios();
+  toast('Recalculado');
+});
+
+// Filter events for precios
+['pf-search','pf-pm'].forEach(function(id) {
+  var el=qs(id); if(!el) return;
+  el.addEventListener('input', function(){ PAGE_PRECIOS=1; renderPrecios(); });
+  el.addEventListener('change', function(){ PAGE_PRECIOS=1; renderPrecios(); });
+});
+
+setupML();
 
 })();
 </script>
