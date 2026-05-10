@@ -344,30 +344,68 @@ tr:hover td{background:rgba(0,212,255,0.03);}
     <!-- CONECTAR ML -->
     <div class="pane" id="pane-mlconn">
       <div class="page-header">
-        <div class="page-title">Conectar <span>Mercado Libre</span></div>
-        <div class="page-sub">Modificá precios directamente en ML desde Velkron</div>
+        <div class="page-title">Publicaciones <span>ML</span></div>
+        <div class="page-sub">Traé todas tus publicaciones y modificá precios directo desde Velkron</div>
       </div>
-      <div class="card" style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:24px;max-width:500px;margin-bottom:20px">
-        <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:14px">Token de acceso ML</div>
-        <input type="password" id="ml-token-input" placeholder="APP_USR-..." style="width:100%;background:var(--surface);border:1px solid var(--border2);border-radius:7px;padding:9px 12px;color:var(--text);font-size:12px;font-family:'JetBrains Mono',monospace;margin-bottom:10px">
-        <div style="display:flex;gap:10px;align-items:center">
-          <button class="btn-save" style="width:auto;padding:9px 20px" id="btn-ml-connect">Conectar</button>
-          <span id="ml-conn-status" style="font-size:12px;color:var(--muted);font-family:'JetBrains Mono',monospace">No conectado</span>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px">
+        <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px">
+          <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px">Token ML</div>
+          <input type="password" id="ml-token-input" placeholder="APP_USR-..." style="width:100%;background:var(--surface);border:1px solid var(--border2);border-radius:7px;padding:9px 12px;color:var(--text);font-size:12px;font-family:'JetBrains Mono',monospace;margin-bottom:10px">
+          <div style="display:flex;gap:10px;align-items:center">
+            <button class="btn-save" style="width:auto;padding:9px 20px" id="btn-ml-connect">Conectar</button>
+            <span id="ml-conn-status" style="font-size:12px;color:var(--muted);font-family:'JetBrains Mono',monospace">No conectado</span>
+          </div>
+        </div>
+        <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px">
+          <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px">Publicaciones</div>
+          <div class="kpi-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:12px">
+            <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px">
+              <div style="font-size:20px;font-weight:700;font-family:'JetBrains Mono',monospace" id="ml-kpi-total">0</div>
+              <div style="font-size:10px;color:var(--muted);text-transform:uppercase">Total</div>
+            </div>
+            <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px">
+              <div style="font-size:20px;font-weight:700;font-family:'JetBrains Mono',monospace;color:var(--red)" id="ml-kpi-diff">0</div>
+              <div style="font-size:10px;color:var(--muted);text-transform:uppercase">Diferencia</div>
+            </div>
+            <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px">
+              <div style="font-size:20px;font-weight:700;font-family:'JetBrains Mono',monospace;color:var(--green)" id="ml-kpi-ok">0</div>
+              <div style="font-size:10px;color:var(--muted);text-transform:uppercase">OK</div>
+            </div>
+          </div>
+          <button class="btn-save" style="width:auto;padding:9px 20px" id="btn-ml-fetch">⬇ Traer publicaciones</button>
+          <span id="ml-fetch-status" style="font-size:11px;color:var(--muted);font-family:'JetBrains Mono',monospace;margin-left:10px"></span>
         </div>
       </div>
 
       <div id="ml-actions" style="display:none">
-        <div style="font-size:13px;font-weight:600;margin-bottom:14px;color:var(--text)">Modificar precios en ML</div>
-        <div style="font-size:12px;color:var(--muted);margin-bottom:16px">Seleccioná un SKU y el precio a enviar a ML</div>
+        <div class="filter-bar">
+          <input class="filter-input filter-search" type="text" id="ml-search" placeholder="Buscar SKU o MLA...">
+          <select class="filter-input" id="ml-filter-estado">
+            <option value="">Todos</option>
+            <option value="diff">Con diferencia</option>
+            <option value="ok">OK</option>
+            <option value="nosku">Sin SKU en CSV</option>
+          </select>
+          <select class="filter-input" id="ml-filter-tipo">
+            <option value="">Todos los tipos</option>
+            <option value="gold_pro">Premium</option>
+            <option value="gold_special">Clásica</option>
+          </select>
+          <button class="btn-save" style="width:auto;padding:7px 14px;font-size:12px" id="btn-ml-fix-all">⚡ Corregir todos</button>
+          <span class="filter-count" id="ml-count">0 publicaciones</span>
+        </div>
         <div class="table-wrap">
           <table>
             <thead><tr>
-              <th>SKU</th><th>MLA</th><th>Precio actual ML</th>
-              <th>Precio base calc.</th><th>Nuevo precio</th><th>Acción</th>
+              <th>MLA</th><th>SKU</th><th>Título</th><th>Tipo</th>
+              <th>Precio ML actual</th><th>Precio calculado</th>
+              <th>Diferencia</th><th>Estado</th><th>Acción</th>
             </tr></thead>
             <tbody id="ml-tbody"></tbody>
           </table>
         </div>
+        <div class="pag" id="ml-pag"></div>
       </div>
     </div>
 
@@ -1038,78 +1076,244 @@ function alertaBadge(alerta, dias) {
 // ── ML CONEXIÓN ───────────────────────────────────────────────
 var ML_TOKEN = '';
 var ML_SELLER_ID = '';
+var ML_PUBS = []; // publicaciones traídas de ML
+var ML_PAGE = 1;
+
+function mlHeaders() {
+  return { 'Authorization': 'Bearer ' + ML_TOKEN };
+}
+
+async function mlGet(path) {
+  var r = await fetch('https://api.mercadolibre.com' + path, { headers: mlHeaders() });
+  return r.json();
+}
+
+async function mlPut(mla, body) {
+  var r = await fetch('https://api.mercadolibre.com/items/' + mla, {
+    method: 'PUT',
+    headers: Object.assign({'Content-Type':'application/json'}, mlHeaders()),
+    body: JSON.stringify(body)
+  });
+  return r.json();
+}
 
 function setupML() {
+  // Restore token
+  var saved = localStorage.getItem('vk_ml_token');
+  if (saved) qs('ml-token-input').value = saved;
+
   qs('btn-ml-connect').addEventListener('click', async function() {
     var token = qs('ml-token-input').value.trim();
     if (!token) { toast('Ingresá el token', 'error'); return; }
+    ML_TOKEN = token;
     qs('ml-conn-status').textContent = 'Conectando...';
     try {
-      var r = await fetch('https://api.mercadolibre.com/users/me', {
-        headers: { 'Authorization': 'Bearer ' + token }
-      });
-      var d = await r.json();
+      var d = await mlGet('/users/me');
       if (d.id) {
-        ML_TOKEN = token;
         ML_SELLER_ID = String(d.id);
         qs('ml-conn-status').textContent = '✓ ' + (d.nickname || d.id);
         qs('ml-conn-status').style.color = 'var(--green)';
         qs('nb-ml').textContent = 'ON';
         qs('nb-ml').style.background = 'rgba(16,185,129,.15)';
         qs('nb-ml').style.color = 'var(--green)';
-        qs('ml-actions').style.display = 'block';
         localStorage.setItem('vk_ml_token', token);
         toast('ML conectado: ' + (d.nickname || d.id));
-        renderMLTable();
-      } else throw new Error(d.message || 'Error');
+      } else throw new Error(d.message || 'Error auth');
     } catch(e) {
-      qs('ml-conn-status').textContent = '✗ Error: ' + e.message;
+      ML_TOKEN = '';
+      qs('ml-conn-status').textContent = '✗ ' + e.message;
       qs('ml-conn-status').style.color = 'var(--red)';
       toast('Error ML: ' + e.message, 'error');
     }
   });
 
-  // Restore token
-  var saved = localStorage.getItem('vk_ml_token');
-  if (saved) qs('ml-token-input').value = saved;
+  qs('btn-ml-fetch').addEventListener('click', fetchMLPubs);
+  qs('btn-ml-fix-all').addEventListener('click', fixAllML);
+
+  ['ml-search','ml-filter-estado','ml-filter-tipo'].forEach(function(id) {
+    var el = qs(id); if (!el) return;
+    el.addEventListener('input', function(){ ML_PAGE=1; renderMLTable(); });
+    el.addEventListener('change', function(){ ML_PAGE=1; renderMLTable(); });
+  });
+}
+
+async function fetchMLPubs() {
+  if (!ML_TOKEN || !ML_SELLER_ID) { toast('Conectá ML primero', 'error'); return; }
+  var btn = qs('btn-ml-fetch');
+  var status = qs('ml-fetch-status');
+  btn.disabled = true; btn.textContent = '⏳ Cargando...';
+  ML_PUBS = [];
+
+  try {
+    // 1. Traer todos los IDs de publicaciones activas
+    var offset = 0, total = 1, ids = [];
+    while (offset < total) {
+      var d = await mlGet('/users/'+ML_SELLER_ID+'/items/search?status=active&limit=100&offset='+offset);
+      total = d.paging ? d.paging.total : 0;
+      if (d.results) ids = ids.concat(d.results);
+      offset += 100;
+      status.textContent = ids.length + '/' + total + ' IDs...';
+      if (!d.results || !d.results.length) break;
+    }
+
+    status.textContent = ids.length + ' publicaciones, trayendo detalles...';
+
+    // 2. Traer detalles en batches de 20
+    for (var i = 0; i < ids.length; i += 20) {
+      var batch = ids.slice(i, i+20);
+      var d2 = await mlGet('/items?ids='+batch.join(',')+'&attributes=id,title,price,listing_type_id,seller_sku,attributes,status');
+      if (Array.isArray(d2)) {
+        d2.forEach(function(item) {
+          if (item.code === 200 && item.body) {
+            var body = item.body;
+            // Extraer SKU de seller_sku o atributos
+            var sku = body.seller_sku || '';
+            if (!sku && body.attributes) {
+              var skuAttr = body.attributes.find(function(a){ return a.id === 'SELLER_SKU'; });
+              if (skuAttr) sku = skuAttr.value_name || '';
+            }
+            ML_PUBS.push({
+              mla: body.id,
+              titulo: body.title,
+              precio: body.price,
+              tipo: body.listing_type_id,
+              sku: sku,
+              status: body.status,
+            });
+          }
+        });
+      }
+      status.textContent = 'Procesando ' + Math.min(i+20, ids.length) + '/' + ids.length + '...';
+    }
+
+    qs('ml-kpi-total').textContent = ML_PUBS.length;
+    qs('ml-actions').style.display = 'block';
+    ML_PAGE = 1;
+    renderMLTable();
+    status.textContent = ML_PUBS.length + ' publicaciones cargadas';
+    toast(ML_PUBS.length + ' publicaciones traídas de ML');
+  } catch(e) {
+    toast('Error: ' + e.message, 'error');
+    status.textContent = 'Error: ' + e.message;
+  }
+  btn.disabled = false; btn.textContent = '⬇ Traer publicaciones';
+}
+
+function getMLData() {
+  var srch = (qs('ml-search').value||'').toLowerCase();
+  var fE   = qs('ml-filter-estado').value||'';
+  var fT   = qs('ml-filter-tipo').value||'';
+  var cfg  = getCfg();
+
+  return ML_PUBS.map(function(pub) {
+    // Buscar SKU en DATA
+    var skuL = (pub.sku||'').toLowerCase().replace(/-x\d+$/i,'').trim();
+    var item = DATA.find(function(d){ return d.sku.toLowerCase()===skuL || skuL.includes(d.sku.toLowerCase()) || d.sku.toLowerCase().includes(skuL); });
+    var calc = item ? calcMargen(item, cfg) : null;
+    var precioCalc = item ? item.precioML : 0;
+    var diff = precioCalc && pub.precio ? Math.abs(pub.precio - precioCalc) / precioCalc * 100 : null;
+    var estado = !item ? 'nosku' : diff !== null && diff > 1.5 ? 'diff' : 'ok';
+    return { pub:pub, item:item, calc:calc, precioCalc:precioCalc, diff:diff, estado:estado };
+  }).filter(function(r) {
+    if (srch && !r.pub.mla.toLowerCase().includes(srch) && !(r.pub.sku||'').toLowerCase().includes(srch) && !r.pub.titulo.toLowerCase().includes(srch)) return false;
+    if (fE && r.estado !== fE) return false;
+    if (fT && r.pub.tipo !== fT) return false;
+    return true;
+  });
 }
 
 function renderMLTable() {
-  if (!DATA.length || !ML_TOKEN) return;
-  var cfg = getCfg();
+  if (!ML_PUBS.length) return;
+  var rows = getMLData();
+  var diff = rows.filter(function(r){ return r.estado==='diff'; }).length;
+  var ok   = rows.filter(function(r){ return r.estado==='ok'; }).length;
+  qs('ml-kpi-diff').textContent = diff;
+  qs('ml-kpi-ok').textContent = ok;
+  qs('ml-count').textContent = rows.length + ' publicaciones';
+
+  var pages = Math.ceil(rows.length/PAGE_SIZE)||1;
+  ML_PAGE = Math.min(ML_PAGE, pages);
+  var page = rows.slice((ML_PAGE-1)*PAGE_SIZE, ML_PAGE*PAGE_SIZE);
+
+  var TIPOS = { gold_pro:'Premium', gold_special:'Clásica' };
   var tbody = qs('ml-tbody');
-  tbody.innerHTML = DATA.filter(function(i){ return i.precioML > 0; }).slice(0, 100).map(function(item) {
-    var calc = calcMargen(item, cfg);
-    var precioCalc = calc ? Math.round(item.precioML) : 0;
+  if (!page.length) {
+    tbody.innerHTML = '<tr><td colspan="9"><div class="empty"><div class="empty-title">Sin resultados</div></div></td></tr>';
+    qs('ml-pag').innerHTML = ''; return;
+  }
+
+  tbody.innerHTML = page.map(function(r) {
+    var diffStr = r.diff !== null
+      ? '<span style="color:'+(r.diff>1.5?'var(--red)':'var(--green)')+'">'+r.diff.toFixed(1)+'%</span>'
+      : '—';
+    var estadoBadge = r.estado==='diff'
+      ? '<span class="margen-badge mg-negativo">Difiere</span>'
+      : r.estado==='nosku'
+      ? '<span class="margen-badge" style="background:var(--border);color:var(--muted)">Sin SKU</span>'
+      : '<span class="margen-badge mg-excelente">OK</span>';
+    var accion = r.estado==='diff' && r.item
+      ? '<button class="btn-save vk-fix-btn" data-mla="'+r.pub.mla+'" data-precio="'+r.precioCalc+'" style="width:auto;padding:4px 12px;font-size:11px">↻ Corregir</button>'
+      : '—';
     return '<tr>'
-      + '<td class="mono" style="font-size:10px">'+item.sku+'</td>'
-      + '<td class="mono" style="color:var(--muted)">—</td>'
-      + '<td class="mono">—</td>'
-      + '<td class="mono" style="color:var(--accent)">'+fmtP(precioCalc)+'</td>'
-      + '<td><input type="number" value="'+precioCalc+'" class="config-input vk-precio-input" data-sku="'+item.sku+'" style="width:100px;padding:4px 8px"></td>'
-      + '<td><button class="btn-save vk-update-btn" data-sku="'+item.sku+'" style="width:auto;padding:5px 12px;font-size:11px">Actualizar ML</button></td>'
+      + '<td class="mono" style="font-size:11px"><a href="https://articulo.mercadolibre.com.ar/'+r.pub.mla+'" target="_blank" style="color:var(--accent);text-decoration:none">'+r.pub.mla+'</a></td>'
+      + '<td class="mono" style="font-size:10px;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(r.pub.sku||'—')+'</td>'
+      + '<td style="font-size:11px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+r.pub.titulo+'</td>'
+      + '<td style="font-size:11px">'+(TIPOS[r.pub.tipo]||r.pub.tipo||'—')+'</td>'
+      + '<td class="mono">'+fmtP(r.pub.precio)+'</td>'
+      + '<td class="mono" style="color:var(--accent)">'+(r.precioCalc?fmtP(r.precioCalc):'—')+'</td>'
+      + '<td>'+diffStr+'</td>'
+      + '<td>'+estadoBadge+'</td>'
+      + '<td>'+accion+'</td>'
       + '</tr>';
   }).join('');
 
-  tbody.querySelectorAll('.vk-update-btn').forEach(function(btn) {
+  tbody.querySelectorAll('.vk-fix-btn').forEach(function(btn) {
     btn.addEventListener('click', async function() {
-      var sku = btn.dataset.sku;
-      var row = btn.closest('tr');
-      var inp = row.querySelector('.vk-precio-input');
-      var precio = parseFloat(inp.value);
-      if (!precio) { toast('Precio inválido', 'error'); return; }
+      var mla = btn.dataset.mla;
+      var precio = parseFloat(btn.dataset.precio);
       btn.disabled = true; btn.textContent = '...';
       try {
-        // Necesita MLA — por ahora muestra mensaje
-        toast('Para modificar precios en ML necesitás cargar el CSV de publicaciones con el MLA de cada SKU', 'warning');
-        btn.textContent = 'Actualizar ML';
-        btn.disabled = false;
+        var d = await mlPut(mla, { price: precio });
+        if (d.id || d.price) {
+          var pub = ML_PUBS.find(function(p){ return p.mla===mla; });
+          if (pub) pub.precio = precio;
+          toast('✓ '+mla+' → '+fmtP(precio));
+          renderMLTable();
+        } else throw new Error(d.message || JSON.stringify(d));
       } catch(e) {
-        toast('Error: ' + e.message, 'error');
-        btn.disabled = false; btn.textContent = 'Actualizar ML';
+        toast('Error: '+e.message, 'error');
+        btn.disabled = false; btn.textContent = '↻ Corregir';
       }
     });
   });
+
+  // Paginación ML
+  var pag = qs('ml-pag');
+  if (pages <= 1) { pag.innerHTML=''; return; }
+  var html = '<span class="pag-info">'+rows.length+' resultados</span>';
+  if (ML_PAGE>1) html += '<button class="pag-btn" onclick="ML_PAGE--; renderMLTable()">‹</button>';
+  for (var i=Math.max(1,ML_PAGE-2); i<=Math.min(pages,ML_PAGE+2); i++) {
+    html += '<button class="pag-btn'+(i===ML_PAGE?' active':'')+'" onclick="ML_PAGE='+i+'; renderMLTable()">'+i+'</button>';
+  }
+  if (ML_PAGE<pages) html += '<button class="pag-btn" onclick="ML_PAGE++; renderMLTable()">›</button>';
+  pag.innerHTML = html;
+}
+
+async function fixAllML() {
+  var rows = getMLData().filter(function(r){ return r.estado==='diff' && r.item && r.precioCalc; });
+  if (!rows.length) { toast('Sin diferencias para corregir', 'warning'); return; }
+  if (!confirm('¿Corregir '+rows.length+' publicaciones en ML?')) return;
+  var ok=0, err=0;
+  for (var i=0; i<rows.length; i++) {
+    var r = rows[i];
+    try {
+      var d = await mlPut(r.pub.mla, { price: r.precioCalc });
+      if (d.id || d.price) { r.pub.precio = r.precioCalc; ok++; }
+      else throw new Error(d.message||'err');
+    } catch(e) { err++; }
+  }
+  renderMLTable();
+  toast('ML: '+ok+' corregidos, '+err+' errores');
 }
 
 // Override renderStock to use new alerta logic
