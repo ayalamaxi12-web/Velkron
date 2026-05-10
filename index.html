@@ -156,13 +156,13 @@ tr:hover td{background:rgba(0,212,255,0.03);}
           </div>
           <div class="config-half">
             <label class="config-label" style="margin-top:6px">IIBB (%)</label>
-            <input class="config-input" type="number" id="cfg-iibb" value="0.5" step="0.1" placeholder="0.5">
+            <input class="config-input" type="number" id="cfg-iibb" value="5" step="0.1" placeholder="5">
           </div>
         </div>
         <div class="config-row">
           <div class="config-half">
             <label class="config-label" style="margin-top:6px">Imp. Cheque (%)</label>
-            <input class="config-input" type="number" id="cfg-che" value="0.6" step="0.1" placeholder="0.6">
+            <input class="config-input" type="number" id="cfg-che" value="1.2" step="0.1" placeholder="1.2">
           </div>
         </div>
       </div>
@@ -381,8 +381,8 @@ function getCfg(){
     ivaProd:parseFloat(qs('cfg-iva-prod').value)||21,
     com:    parseFloat(qs('cfg-com').value)||16,
     ivaCom: parseFloat(qs('cfg-iva-com').value)||21,
-    iibb:   parseFloat(qs('cfg-iibb').value)||0.5,
-    che:    parseFloat(qs('cfg-che').value)||0.6,
+    iibb:   parseFloat(qs('cfg-iibb').value)||5,
+    che:    parseFloat(qs('cfg-che').value)||1.2,
     flex:   parseFloat(qs('cfg-flex').value)||8490,
   };
 }
@@ -408,11 +408,12 @@ function calcMargen(item,cfg){
   var comision=netoSinIVA*(cfg.com/100);
   // IVA sobre comisión
   var ivaComision=comision*(cfg.ivaCom/100);
-  // Monto IVA en pesos = Precio ML - neto sin IVA
-  var montoIVA=precioML-netoSinIVA;
-  // IIBB = (Precio ML + Monto IVA) x % — base: precio venta + descuento IVA
-  var iibb=(precioML+montoIVA)*(cfg.iibb/100);
-  // Imp. Cheque = Precio ML x % — solo sobre precio de venta
+  // Monto IVA en pesos (negativo, como en el Excel: (V/(1+iva%))-V )
+  var montoIVA=netoSinIVA-precioML; // valor negativo
+  // IIBB = (Precio ML + montoIVA negativo) x % = netoSinIVA x %
+  // Equivale a (V3+P3)*5% donde P3 es negativo
+  var iibb=netoSinIVA*(cfg.iibb/100);
+  // Imp. Cheque = Precio ML x 1.2%
   var impChe=precioML*(cfg.che/100);
 
   var totalDescuentos=comision+ivaComision+iibb+impChe+feeEnvio+costoUnidad;
