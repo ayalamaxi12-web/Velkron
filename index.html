@@ -227,10 +227,10 @@ tr:hover td{background:rgba(0,212,255,0.03);}
           <table>
             <thead><tr>
               <th>SKU</th><th>Título</th><th>PM</th>
-              <th>Precio ML</th><th>Neto s/IVA</th>
+              <th>Precio ML</th><th>Desc. IVA</th>
               <th>Costo $</th><th>Fee envío</th><th>Costo/unidad</th>
               <th>Comisión+IVA</th><th>IIBB+Che</th>
-              <th>Ganancia $</th><th>Margen</th>
+              <th>Neto USD</th><th>Ganancia $</th><th>Margen</th><th>Markup</th>
             </tr></thead>
             <tbody id="rent-tbody"></tbody>
           </table>
@@ -416,17 +416,27 @@ function calcMargen(item,cfg){
   // Imp. Cheque = Precio ML x 1.2%
   var impChe=precioML*(cfg.che/100);
 
-  var totalDescuentos=comision+ivaComision+iibb+impChe+feeEnvio+costoUnidad;
-  var netoFinal=netoSinIVA-totalDescuentos;
-  var ganancia=netoFinal-costoPesos;
-  var margen=netoSinIVA>0?(ganancia/netoSinIVA*100):0;
+  // Fórmula exacta del Excel:
+  // Margen = 1 - (CostoUSD / ((PrecioML + montoIVA(neg) + comision(neg) + iibb(neg) + impChe(neg) + costoUnidad(neg)) / TC))
+  // montoIVA negativo = netoSinIVA - precioML
+  var montoIVANeg = netoSinIVA - precioML; // negativo
+  var comisionNeg = -(comision + ivaComision);
+  var iibbNeg = -iibb;
+  var impCheNeg = -impChe;
+  var feeNeg = -(feeEnvio + costoUnidad);
+  var sumaDesc = precioML + montoIVANeg + comisionNeg + iibbNeg + impCheNeg + feeNeg;
+  var netoUSD = sumaDesc / cfg.tc;
+  var margen = netoUSD > 0 ? (1 - item.costoUSD / netoUSD) * 100 : 0;
+  var markup = item.costoUSD > 0 ? (netoUSD / item.costoUSD - 1) * 100 : 0;
+  var ganancia = (netoUSD - item.costoUSD) * cfg.tc; // en pesos
+  var montoIVAPesos = precioML - netoSinIVA; // positivo — cuánto se descuenta
 
   return{
-    netoSinIVA:netoSinIVA,montoIVA:montoIVA,costoPesos:costoPesos,
+    netoSinIVA:netoSinIVA,montoIVAPesos:montoIVAPesos,costoPesos:costoPesos,
     feeEnvio:feeEnvio,costoUnidad:costoUnidad,
     comision:comision,ivaComision:ivaComision,
-    iibb:iibb,impChe:impChe,totalDescuentos:totalDescuentos,
-    netoFinal:netoFinal,ganancia:ganancia,margen:margen,
+    iibb:iibb,impChe:impChe,
+    netoUSD:netoUSD,ganancia:ganancia,margen:margen,markup:markup,
   };
 }
 
@@ -631,14 +641,16 @@ function renderRentabilidad(){
       +'<td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px" title="'+r.item.titulo+'">'+r.item.titulo+'</td>'
       +'<td style="font-size:11px;color:var(--accent)">'+r.item.pm+'</td>'
       +'<td class="mono">'+(r.item.precioML?fmtP(r.item.precioML):'-')+'</td>'
-      +'<td class="mono" style="color:var(--muted2)">'+(c?fmtP(c.netoSinIVA):'-')+'</td>'
+      +'<td class="mono" style="color:var(--red)">'+(c?'-'+fmtP(c.montoIVAPesos):'-')+'</td>'
       +'<td class="mono">'+(c?fmtP(c.costoPesos):'-')+'</td>'
-      +'<td class="mono" style="color:var(--muted)">'+(c?(c.feeEnvio>0?fmtP(c.feeEnvio):'—'):'-')+'</td>'
-      +'<td class="mono" style="color:var(--muted)">'+(c?(c.costoUnidad>0?fmtP(c.costoUnidad):'—'):'-')+'</td>'
-      +'<td class="mono" style="color:var(--muted)">'+(c?fmtP(c.comision+c.ivaComision):'-')+'</td>'
-      +'<td class="mono" style="color:var(--muted)">'+(c?fmtP(c.iibb+c.impChe):'-')+'</td>'
+      +'<td class="mono" style="color:var(--muted)">'+(c?(c.feeEnvio>0?'-'+fmtP(c.feeEnvio):'—'):'-')+'</td>'
+      +'<td class="mono" style="color:var(--muted)">'+(c?(c.costoUnidad>0?'-'+fmtP(c.costoUnidad):'—'):'-')+'</td>'
+      +'<td class="mono" style="color:var(--muted)">-'+(c?fmtP(c.comision+c.ivaComision):'-')+'</td>'
+      +'<td class="mono" style="color:var(--muted)">-'+(c?fmtP(c.iibb+c.impChe):'-')+'</td>'
+      +'<td class="mono" style="color:var(--accent)">'+(c?c.netoUSD.toFixed(2):'-')+'</td>'
       +'<td class="mono" style="'+(c&&c.ganancia>0?'color:var(--green)':'color:var(--red)')+'">'+(c?fmtP(c.ganancia):'-')+'</td>'
       +'<td><span class="margen-badge '+cls+'">'+lbl+'</span></td>'
+      +'<td class="mono" style="color:var(--muted2)">'+(c?(c.markup>0?'+':'')+c.markup.toFixed(2)+'%':'-')+'</td>'
       +'</tr>';
   }).join('');
 
