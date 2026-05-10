@@ -408,10 +408,12 @@ function calcMargen(item,cfg){
   var comision=netoSinIVA*(cfg.com/100);
   // IVA sobre comisión
   var ivaComision=comision*(cfg.ivaCom/100);
-  // IIBB sobre precio neto sin IVA
-  var iibb=netoSinIVA*(cfg.iibb/100);
-  // Imp. Cheque sobre precio neto sin IVA
-  var impChe=netoSinIVA*(cfg.che/100);
+  // Monto IVA en pesos = Precio ML - neto sin IVA
+  var montoIVA=precioML-netoSinIVA;
+  // IIBB = (Precio ML + Monto IVA) x % — base: precio venta + descuento IVA
+  var iibb=(precioML+montoIVA)*(cfg.iibb/100);
+  // Imp. Cheque = Precio ML x % — solo sobre precio de venta
+  var impChe=precioML*(cfg.che/100);
 
   var totalDescuentos=comision+ivaComision+iibb+impChe+feeEnvio+costoUnidad;
   var netoFinal=netoSinIVA-totalDescuentos;
@@ -419,7 +421,7 @@ function calcMargen(item,cfg){
   var margen=netoSinIVA>0?(ganancia/netoSinIVA*100):0;
 
   return{
-    netoSinIVA:netoSinIVA,costoPesos:costoPesos,
+    netoSinIVA:netoSinIVA,montoIVA:montoIVA,costoPesos:costoPesos,
     feeEnvio:feeEnvio,costoUnidad:costoUnidad,
     comision:comision,ivaComision:ivaComision,
     iibb:iibb,impChe:impChe,totalDescuentos:totalDescuentos,
