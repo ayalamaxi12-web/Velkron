@@ -1153,38 +1153,17 @@ async function fetchMLPubs() {
   ML_PUBS = [];
 
   try {
-    // 1. Traer todos los IDs — scroll directo al browser (sin CORS en GET search)
-    // ML permite scroll_id para superar el límite de 1000
+    // 1. Traer todos los IDs via Railway (scroll server-side, sin limite de 1000)
     var ids = [];
-    var total = 9999;
-    var scrollId = null;
-    var intentos = 0;
-
-    while (ids.length < total && intentos < 60) {
-      intentos++;
-      var searchPath;
-      if (scrollId) {
-        searchPath = 'https://api.mercadolibre.com/users/'+ML_SELLER_ID+'/items/search?status=active&limit=100&scroll_id='+encodeURIComponent(scrollId);
-      } else {
-        searchPath = 'https://api.mercadolibre.com/users/'+ML_SELLER_ID+'/items/search?status=active&limit=100&offset=0';
-      }
-      // Llamada directa al browser (GET IDs no tiene CORS issue)
-      var resp = await fetch(searchPath, { headers: { 'Authorization': 'Bearer ' + ML_TOKEN } });
-      var d = await resp.json();
-      if (d.paging) total = d.paging.total;
-      if (!d.results || !d.results.length) break;
-      d.results.forEach(function(id) {
-        if (ids.indexOf(id) === -1) ids.push(id);
-      });
-      scrollId = d.scroll_id || null;
-      status.textContent = ids.length + '/' + total + ' IDs...';
-      // Si no hay scroll_id y llegamos a 1000, no podemos más por offset
-      if (!scrollId && ids.length >= 1000) {
-        status.textContent = ids.length + ' IDs (límite ML sin scroll)';
-        break;
-      }
-      if (!scrollId) break;
-    }
+    var total = 0;
+    status.textContent = 'Trayendo IDs via servidor...';
+    var allIdsResp = await fetch(PROXY_BASE + '/ml-proxy/all-ids/' + ML_SELLER_ID, {
+      headers: vkHeaders()
+    });
+    var allIdsData = await allIdsResp.json();
+    ids = allIdsData.ids || [];
+    total = allIdsData.total || ids.length;
+    status.textContent = ids.length + '/' + total + ' IDs traidos del servidor';
 
     status.textContent = ids.length + ' publicaciones — trayendo detalles...';
 
@@ -1257,7 +1236,8 @@ async function fetchMLPubs() {
       var batchPubs = ML_PUBS.slice(j, j+20);
       var mlaIds = batchPubs.map(function(p){ return p.mla; });
       try {
-        var sv = await mlGet('/items/visits?ids=' + mlaIds.join(','));
+        var visResp = await fetch(PROXY_BASE + '/ml-proxy/visits?ids=' + mlaIds.join(','), { headers: vkHeaders() });
+        var sv = await visResp.json();
         if (sv && !sv.error) {
           mlaIds.forEach(function(mla) {
             var pub = ML_PUBS.find(function(p){ return p.mla === mla; });
