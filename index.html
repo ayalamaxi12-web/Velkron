@@ -1153,34 +1153,28 @@ async function fetchMLPubs() {
   ML_PUBS = [];
 
   try {
-    // 1. Traer todos los IDs usando scroll para superar límite de 1000
+    // 1. Traer todos los IDs — paginación clásica con offset (scroll_id no funciona via proxy)
     var ids = [];
-    var scrollId = null;
     var total = 9999;
+    var offset = 0;
 
-    while (ids.length < total) {
-      var path = '/users/'+ML_SELLER_ID+'/items/search?status=active&limit=100';
-      if (scrollId) {
-        path += '&scroll_id=' + encodeURIComponent(scrollId);
-      } else {
-        path += '&offset=0';
-      }
-      var d = await mlGet(path);
+    while (offset < total && offset < 5000) {
+      var d = await mlGet('/users/'+ML_SELLER_ID+'/items/search?status=active&limit=100&offset='+offset);
       if (d.paging) total = d.paging.total;
       if (!d.results || !d.results.length) break;
-      ids = ids.concat(d.results);
-      scrollId = d.scroll_id || null;
+      // Deduplicar IDs
+      d.results.forEach(function(id) {
+        if (ids.indexOf(id) === -1) ids.push(id);
+      });
+      offset += 100;
       status.textContent = ids.length + '/' + total + ' IDs...';
-      // Si no hay scroll_id usar offset clásico (fallback)
-      if (!scrollId && ids.length < total) {
-        // fallback paginación clásica hasta 1000
-        if (ids.length >= 1000) break;
-      }
     }
 
     status.textContent = ids.length + ' publicaciones — trayendo detalles...';
 
-    // 2. Traer detalles en batches de 20
+    // 2. Traer detalles individualmente para evitar duplicados del multi-fetch
+    // Usamos batches de 20 pero verificamos que cada respuesta tenga ID único
+    var seenMLAs = {};
     for (var i = 0; i < ids.length; i += 20) {
       var batch = ids.slice(i, i+20);
       var d2 = await mlGet('/items?ids='+batch.join(',')+'&attributes=id,title,price,original_price,listing_type_id,seller_sku,attributes,status,sale_terms,installments');
@@ -1188,6 +1182,9 @@ async function fetchMLPubs() {
         d2.forEach(function(item) {
           if (item.code === 200 && item.body) {
             var body = item.body;
+            // Evitar duplicados
+            if (seenMLAs[body.id]) return;
+            seenMLAs[body.id] = true;
 
             // Extraer SKU
             var sku = body.seller_sku || '';
@@ -1195,6 +1192,14 @@ async function fetchMLPubs() {
               var skuAttr = body.attributes.find(function(a){ return a.id === 'SELLER_SKU'; });
               if (skuAttr) sku = skuAttr.value_name || '';
             }
+
+            // Extraer tipo
+            var tipo = body.listing_type_id || '';
+            var tipoLabel = tipo === 'gold_pro' ? 'Premium'
+                          : tipo === 'gold_premium' ? 'Premium'
+                          : tipo === 'gold_special' ? 'Clásica'
+                          : tipo === 'gold' ? 'Clásica'
+                          : tipo || 'Clásica';
 
             // Extraer cuotas desde sale_terms
             var cuotas = 0;
@@ -1217,7 +1222,8 @@ async function fetchMLPubs() {
               titulo: body.title,
               precio: body.price,
               precioTachado: body.original_price || null,
-              tipo: body.listing_type_id,
+              tipo: tipoLabel,
+              tipoId: tipo,
               sku: sku,
               status: body.status,
               cuotas: cuotas,
@@ -1228,11 +1234,11 @@ async function fetchMLPubs() {
           }
         });
       }
-      status.textContent = 'Detalles ' + Math.min(i+20, ids.length) + '/' + ids.length + '...';
+      status.textContent = 'Detalles ' + Math.min(i+20, ids.length) + '/' + ids.length + ' (' + ML_PUBS.length + ' únicos)...';
     }
 
-    // 3. Traer ventas en batches de 20
-    status.textContent = 'Trayendo ventas...';
+    // 3. Traer visitas en batches
+    status.textContent = 'Trayendo visitas...';
     for (var j = 0; j < ML_PUBS.length; j += 20) {
       var batchPubs = ML_PUBS.slice(j, j+20);
       var mlaIds = batchPubs.map(function(p){ return p.mla; });
@@ -1244,7 +1250,7 @@ async function fetchMLPubs() {
             if (pub && sv[mla] !== undefined) pub.visitas = sv[mla];
           });
         }
-      } catch(e) {}
+      } catch(e2) {}
       status.textContent = 'Visitas ' + Math.min(j+20, ML_PUBS.length) + '/' + ML_PUBS.length + '...';
     }
 
@@ -1303,7 +1309,7 @@ function getMLData() {
   }).filter(function(r) {
     if (srch && !r.pub.mla.toLowerCase().includes(srch) && !(r.pub.sku||'').toLowerCase().includes(srch) && !r.pub.titulo.toLowerCase().includes(srch)) return false;
     if (fE && r.estado !== fE) return false;
-    if (fT && r.pub.tipo !== fT) return false;
+    if (fT && r.pub.tipoId !== fT) return false;
     return true;
   });
 }
@@ -1321,7 +1327,7 @@ function renderMLTable() {
   ML_PAGE = Math.min(ML_PAGE, pages);
   var page = rows.slice((ML_PAGE-1)*PAGE_SIZE, ML_PAGE*PAGE_SIZE);
 
-  var TIPOS = { gold_pro:'Premium', gold_special:'Clásica' };
+  var TIPOS = {}; // tipo ya viene como label
   var tbody = qs('ml-tbody');
   if (!page.length) {
     tbody.innerHTML = '<tr><td colspan="9"><div class="empty"><div class="empty-title">Sin resultados</div></div></td></tr>';
@@ -1347,7 +1353,7 @@ function renderMLTable() {
       + '<td class="mono" style="font-size:11px;white-space:nowrap"><a href="https://articulo.mercadolibre.com.ar/MLA-'+r.pub.mla.replace('MLA','').replace(/^0+/,'')+'-_JM" target="_blank" style="color:var(--accent);text-decoration:none">'+r.pub.mla+' ↗</a></td>'
       + '<td class="mono" style="font-size:10px;white-space:nowrap">'+(r.pub.sku||'—')+(r.multiplier>1?' <span style="color:var(--accent);font-size:9px">×'+r.multiplier+'</span>':'')+'</td>'
       + '<td style="font-size:11px;min-width:180px;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+r.pub.titulo+'">'+r.pub.titulo+'</td>'
-      + '<td style="font-size:11px;white-space:nowrap">'+(TIPOS[r.pub.tipo]||r.pub.tipo||'—')+'</td>'
+      + '<td style="font-size:11px;white-space:nowrap">'+(r.pub.tipo||'—')+'</td>'
       + '<td style="font-size:11px;white-space:nowrap;color:'+(r.pub.cuotas>0?'var(--yellow)':'var(--muted)')+'">'+r.pub.cuotasLabel+'</td>'
       + '<td class="mono" style="color:var(--muted2);white-space:nowrap">'+(r.pub.visitas!==null?fmtN(r.pub.visitas):'—')+'</td>'
       + '<td class="mono" style="white-space:nowrap">'+fmtP(r.pub.precio)+'</td>'
