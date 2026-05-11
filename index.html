@@ -100,6 +100,15 @@ tr:hover td{background:rgba(0,212,255,0.03);}
 .toast.success{border-left:3px solid var(--green);}
 .toast.error{border-left:3px solid var(--red);}
 .toast.warning{border-left:3px solid var(--yellow);}
+.table-wrap::-webkit-scrollbar{height:8px;width:8px;}
+.table-wrap::-webkit-scrollbar-track{background:var(--surface);}
+.table-wrap::-webkit-scrollbar-thumb{background:var(--border2);border-radius:4px;}
+.table-wrap::-webkit-scrollbar-thumb:hover{background:var(--accent);}
+.scroll-top-bar{overflow-x:scroll;height:12px;margin-bottom:4px;}
+.scroll-top-bar::-webkit-scrollbar{height:8px;}
+.scroll-top-bar::-webkit-scrollbar-track{background:var(--surface);}
+.scroll-top-bar::-webkit-scrollbar-thumb{background:var(--accent);border-radius:4px;}
+.scroll-top-inner{height:1px;}
 .detalle-row{background:rgba(0,212,255,0.03);border-left:2px solid var(--accent);}
 .detalle-row td{font-size:11px;color:var(--muted2);}
 </style>
@@ -397,7 +406,7 @@ tr:hover td{background:rgba(0,212,255,0.03);}
           <button class="btn-save" style="width:auto;padding:7px 14px;font-size:12px" id="btn-ml-fix-all">⚡ Corregir todos</button>
           <span class="filter-count" id="ml-count">0 publicaciones</span>
         </div>
-        <div class="table-wrap" style="overflow-x:auto">
+        <div class="table-wrap" style="overflow-x:scroll">
           <table style="min-width:1400px">
             <thead><tr>
               <th>MLA</th><th>SKU</th><th>Título</th><th>Tipo</th>
@@ -1158,7 +1167,7 @@ async function fetchMLPubs() {
     var total = 0;
     status.textContent = 'Trayendo todas las publicaciones...';
     try {
-      var allIdsResp = await fetch(PROXY_BASE + '/ml-proxy/all-ids/' + ML_SELLER_ID, {
+      var allIdsResp = await fetch(PROXY_BASE + '/ml-proxy/all-ids/' + ML_SELLER_ID + '?token=' + encodeURIComponent(ML_TOKEN), {
         headers: vkHeaders()
       });
       var allIdsData = await allIdsResp.json();
@@ -1392,6 +1401,28 @@ function renderMLTable() {
   }).join('');
 
   // Regla de precio → actualiza el input automáticamente
+  // Agregar barra de scroll duplicada arriba de la tabla ML
+  var mlWrap = qs('ml-tbody') ? qs('ml-tbody').closest('.table-wrap') : null;
+  if (mlWrap) {
+    var existingBar = mlWrap.previousElementSibling;
+    if (!existingBar || !existingBar.classList.contains('scroll-top-bar')) {
+      var topBar = document.createElement('div');
+      topBar.className = 'scroll-top-bar';
+      var inner = document.createElement('div');
+      inner.className = 'scroll-top-inner';
+      inner.style.width = mlWrap.scrollWidth + 'px';
+      topBar.appendChild(inner);
+      mlWrap.parentNode.insertBefore(topBar, mlWrap);
+      // Sincronizar scroll
+      topBar.addEventListener('scroll', function(){ mlWrap.scrollLeft = topBar.scrollLeft; });
+      mlWrap.addEventListener('scroll', function(){ topBar.scrollLeft = mlWrap.scrollLeft; });
+    } else {
+      // Actualizar ancho
+      var innerEl = existingBar.querySelector('.scroll-top-inner');
+      if (innerEl) innerEl.style.width = mlWrap.scrollWidth + 'px';
+    }
+  }
+
   tbody.querySelectorAll('.vk-regla-sel').forEach(function(sel) {
     sel.addEventListener('change', function() {
       var mla = sel.dataset.mla;
