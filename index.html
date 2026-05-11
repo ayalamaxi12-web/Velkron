@@ -401,9 +401,10 @@ tr:hover td{background:rgba(0,212,255,0.03);}
           <table style="min-width:1400px">
             <thead><tr>
               <th>MLA</th><th>SKU</th><th>Título</th><th>Tipo</th>
-              <th>Cuotas</th><th>Visitas</th>
+              <th>Cuotas actuales</th><th>Visitas</th>
               <th>Precio actual</th><th>Precio tachado</th>
-              <th>Precio calculado</th><th>Nuevo precio</th>
+              <th>Regla de precio</th><th>Nuevo precio</th>
+              <th>Cuotas nuevas</th>
               <th>Diferencia</th><th>Estado</th><th>Acción</th>
             </tr></thead>
             <tbody id="ml-tbody"></tbody>
@@ -1195,13 +1196,20 @@ async function fetchMLPubs() {
               if (skuAttr) sku = skuAttr.value_name || '';
             }
 
-            // Extraer cuotas
+            // Extraer cuotas desde sale_terms
             var cuotas = 0;
             var cuotasLabel = 'Contado';
-            if (body.installments && body.installments.quantity > 1) {
+            if (body.sale_terms) {
+              var instTerm = body.sale_terms.find(function(t){ return t.id === 'INSTALLMENTS'; });
+              if (instTerm && instTerm.value_struct && instTerm.value_struct.number > 1) {
+                cuotas = instTerm.value_struct.number;
+                cuotasLabel = cuotas + 'c sin interés';
+              }
+            }
+            if (!cuotas && body.installments && body.installments.quantity > 1) {
               cuotas = body.installments.quantity;
               var rate = body.installments.rate || 0;
-              cuotasLabel = cuotas + 'c' + (rate === 0 ? ' sin interés' : ' c/interés');
+              cuotasLabel = cuotas + 'c' + (rate === 0 ? ' sin interés' : '');
             }
 
             ML_PUBS.push({
@@ -1261,24 +1269,37 @@ function getMLData() {
 
   var cuotas = getCuotas();
   return ML_PUBS.map(function(pub) {
-    // Buscar SKU en DATA
-    var skuL = (pub.sku||'').toLowerCase().replace(/-x\d+$/i,'').trim();
-    var item = DATA.find(function(d){ return d.sku.toLowerCase()===skuL || skuL.includes(d.sku.toLowerCase()) || d.sku.toLowerCase().includes(skuL); });
+    // Detectar multiplicador X2/X3/X4 en el SKU de la publicación
+    var skuRaw = (pub.sku||'').trim();
+    var multiplier = 1;
+    var mMatch = skuRaw.match(/[_\-\s]?x(\d+)$/i);
+    if (mMatch) multiplier = parseInt(mMatch[1]) || 1;
+
+    // Buscar SKU base en DATA (sin el X2/X3)
+    var skuL = skuRaw.toLowerCase().replace(/[_\-\s]?x\d+$/i,'').trim();
+    var item = DATA.find(function(d){
+      var dl = d.sku.toLowerCase();
+      return dl === skuL || skuL.includes(dl) || dl.includes(skuL);
+    });
     var calc = item ? calcMargen(item, cfg) : null;
 
-    // Precio calculado según cuotas de la publicación
-    var precioCalc = 0;
+    // Precio calculado según cuotas × multiplicador
+    var precioCalcBase = 0;
     if (item) {
-      if (pub.cuotas === 3)       precioCalc = precioConCuotas(item.precioML, cuotas.c3);
-      else if (pub.cuotas === 6)  precioCalc = precioConCuotas(item.precioML, cuotas.c6);
-      else if (pub.cuotas === 9)  precioCalc = precioConCuotas(item.precioML, cuotas.c9);
-      else if (pub.cuotas === 12) precioCalc = precioConCuotas(item.precioML, cuotas.c12);
-      else                         precioCalc = item.precioML;
+      var base = item.precioML * multiplier;
+      if (pub.cuotas === 3)       precioCalcBase = precioConCuotas(base, cuotas.c3);
+      else if (pub.cuotas === 6)  precioCalcBase = precioConCuotas(base, cuotas.c6);
+      else if (pub.cuotas === 9)  precioCalcBase = precioConCuotas(base, cuotas.c9);
+      else if (pub.cuotas === 12) precioCalcBase = precioConCuotas(base, cuotas.c12);
+      else                         precioCalcBase = base;
     }
+    var precioCalc = Math.round(precioCalcBase);
 
-    var diff = precioCalc && pub.precio ? Math.abs(pub.precio - precioCalc) / precioCalc * 100 : null;
-    var estado = !item ? 'nosku' : diff !== null && diff > 1.5 ? 'diff' : 'ok';
-    return { pub:pub, item:item, calc:calc, precioCalc:precioCalc, diff:diff, estado:estado };
+    // diff: positivo = publicación más cara que calculado, negativo = más barata
+    var diffPct = precioCalc && pub.precio ? (pub.precio - precioCalc) / precioCalc * 100 : null;
+    var diffAbs = diffPct !== null ? Math.abs(diffPct) : null;
+    var estado = !item ? 'nosku' : diffAbs !== null && diffAbs > 1.5 ? 'diff' : 'ok';
+    return { pub:pub, item:item, calc:calc, precioCalc:precioCalc, diffPct:diffPct, diffAbs:diffAbs, estado:estado, multiplier:multiplier };
   }).filter(function(r) {
     if (srch && !r.pub.mla.toLowerCase().includes(srch) && !(r.pub.sku||'').toLowerCase().includes(srch) && !r.pub.titulo.toLowerCase().includes(srch)) return false;
     if (fE && r.estado !== fE) return false;
@@ -1308,49 +1329,105 @@ function renderMLTable() {
   }
 
   tbody.innerHTML = page.map(function(r) {
-    var diffStr = r.diff !== null
-      ? '<span style="color:'+(r.diff>1.5?'var(--red)':'var(--green)')+'">'+r.diff.toFixed(1)+'%</span>'
+    // diffPct: positivo = publicación más cara (amarillo), negativo = más barata (rojo)
+    var diffStr = r.diffPct !== null
+      ? (r.diffAbs > 1.5
+          ? '<span style="color:'+(r.diffPct>0?'var(--yellow)':'var(--red)')+';">'+(r.diffPct>0?'+':'')+r.diffPct.toFixed(1)+'%</span>'
+          : '<span style="color:var(--green)">0.0%</span>')
       : '—';
-    var estadoBadge = r.estado==='diff'
-      ? '<span class="margen-badge mg-negativo">Difiere</span>'
+    var estadoBadge = r.estado==='diff' && r.diffPct > 0
+      ? '<span class="margen-badge mg-regular">▲ Más caro</span>'
+      : r.estado==='diff' && r.diffPct < 0
+      ? '<span class="margen-badge mg-negativo">▼ Más barato</span>'
       : r.estado==='nosku'
       ? '<span class="margen-badge" style="background:var(--border);color:var(--muted)">Sin SKU</span>'
-      : '<span class="margen-badge mg-excelente">OK</span>';
-    var accion = r.estado==='diff' && r.item
-      ? '<button class="btn-save vk-fix-btn" data-mla="'+r.pub.mla+'" data-precio="'+r.precioCalc+'" style="width:auto;padding:4px 12px;font-size:11px">↻ Corregir</button>'
-      : '—';
+      : '<span class="margen-badge mg-excelente">✓ OK</span>';
+// accion handled inline
     return '<tr>'
-      + '<td class="mono" style="font-size:11px;white-space:nowrap"><a href="https://articulo.mercadolibre.com.ar/'+r.pub.mla+'" target="_blank" style="color:var(--accent);text-decoration:none">'+r.pub.mla+' ↗</a></td>'
-      + '<td class="mono" style="font-size:10px;white-space:nowrap">'+(r.pub.sku||'—')+'</td>'
+      + '<td class="mono" style="font-size:11px;white-space:nowrap"><a href="https://articulo.mercadolibre.com.ar/MLA-'+r.pub.mla.replace('MLA','').replace(/^0+/,'')+'-_JM" target="_blank" style="color:var(--accent);text-decoration:none">'+r.pub.mla+' ↗</a></td>'
+      + '<td class="mono" style="font-size:10px;white-space:nowrap">'+(r.pub.sku||'—')+(r.multiplier>1?' <span style="color:var(--accent);font-size:9px">×'+r.multiplier+'</span>':'')+'</td>'
       + '<td style="font-size:11px;min-width:180px;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+r.pub.titulo+'">'+r.pub.titulo+'</td>'
       + '<td style="font-size:11px;white-space:nowrap">'+(TIPOS[r.pub.tipo]||r.pub.tipo||'—')+'</td>'
       + '<td style="font-size:11px;white-space:nowrap;color:'+(r.pub.cuotas>0?'var(--yellow)':'var(--muted)')+'">'+r.pub.cuotasLabel+'</td>'
       + '<td class="mono" style="color:var(--muted2);white-space:nowrap">'+(r.pub.visitas!==null?fmtN(r.pub.visitas):'—')+'</td>'
       + '<td class="mono" style="white-space:nowrap">'+fmtP(r.pub.precio)+'</td>'
       + '<td class="mono" style="white-space:nowrap;color:var(--muted);text-decoration:line-through">'+(r.pub.precioTachado?fmtP(r.pub.precioTachado):'—')+'</td>'
-      + '<td class="mono" style="color:var(--accent);white-space:nowrap">'+(r.precioCalc?fmtP(r.precioCalc):'—')+'</td>'
+      + '<td>'
+        + '<select class="filter-input vk-regla-sel" data-mla="'+r.pub.mla+'" data-base="'+(r.item?r.item.precioML*r.multiplier:0)+'" style="padding:4px 8px;font-size:11px;width:130px">'
+        + '<option value="base">Precio base</option>'
+        + '<option value="c3" '+(r.pub.cuotas===3?'selected':'')+'>3 cuotas</option>'
+        + '<option value="c6" '+(r.pub.cuotas===6?'selected':'')+'>6 cuotas</option>'
+        + '<option value="c9" '+(r.pub.cuotas===9?'selected':'')+'>9 cuotas</option>'
+        + '<option value="c12" '+(r.pub.cuotas===12?'selected':'')+'>12 cuotas</option>'
+        + '</select>'
+        + '</td>'
       + '<td><input type="number" value="'+(r.precioCalc||r.pub.precio)+'" class="config-input vk-precio-input" data-mla="'+r.pub.mla+'" style="width:110px;padding:4px 8px;font-size:11px"></td>'
+      + '<td>'
+        + '<select class="filter-input vk-cuotas-sel" data-mla="'+r.pub.mla+'" style="padding:4px 8px;font-size:11px;width:120px">'
+        + '<option value="0" '+(r.pub.cuotas===0?'selected':'')+'>Contado</option>'
+        + '<option value="3" '+(r.pub.cuotas===3?'selected':'')+'>3 cuotas</option>'
+        + '<option value="6" '+(r.pub.cuotas===6?'selected':'')+'>6 cuotas</option>'
+        + '<option value="9" '+(r.pub.cuotas===9?'selected':'')+'>9 cuotas</option>'
+        + '<option value="12" '+(r.pub.cuotas===12?'selected':'')+'>12 cuotas</option>'
+        + '</select>'
+        + '</td>'
       + '<td style="white-space:nowrap">'+diffStr+'</td>'
       + '<td style="white-space:nowrap">'+estadoBadge+'</td>'
       + '<td style="white-space:nowrap"><button class="btn-save vk-fix-btn" data-mla="'+r.pub.mla+'" style="width:auto;padding:4px 12px;font-size:11px">↻ Aplicar</button></td>'
       + '</tr>';
   }).join('');
 
+  // Regla de precio → actualiza el input automáticamente
+  tbody.querySelectorAll('.vk-regla-sel').forEach(function(sel) {
+    sel.addEventListener('change', function() {
+      var mla = sel.dataset.mla;
+      var base = parseFloat(sel.dataset.base) || 0;
+      var cuotas = getCuotas();
+      var row = sel.closest('tr');
+      var inp = row ? row.querySelector('.vk-precio-input') : null;
+      if (!inp || !base) return;
+      var v = sel.value;
+      var precio = v==='c3' ? precioConCuotas(base, cuotas.c3)
+                 : v==='c6' ? precioConCuotas(base, cuotas.c6)
+                 : v==='c9' ? precioConCuotas(base, cuotas.c9)
+                 : v==='c12'? precioConCuotas(base, cuotas.c12)
+                 : base;
+      inp.value = precio;
+      // También actualizar el sel de cuotas
+      var cuotasSel = row.querySelector('.vk-cuotas-sel');
+      if (cuotasSel) {
+        cuotasSel.value = v==='c3'?'3':v==='c6'?'6':v==='c9'?'9':v==='c12'?'12':'0';
+      }
+    });
+  });
+
   tbody.querySelectorAll('.vk-fix-btn').forEach(function(btn) {
     btn.addEventListener('click', async function() {
       var mla = btn.dataset.mla;
-      // Leer precio del input de la misma fila
       var row = btn.closest('tr');
       var inp = row ? row.querySelector('.vk-precio-input') : null;
+      var cuotasSel = row ? row.querySelector('.vk-cuotas-sel') : null;
       var precio = inp ? parseFloat(inp.value) : 0;
+      var cuotasNuevas = cuotasSel ? parseInt(cuotasSel.value) : 0;
       if (!precio || precio <= 0) { toast('Precio inválido', 'error'); return; }
       btn.disabled = true; btn.textContent = '...';
       try {
-        var d = await mlPut(mla, { price: precio });
+        // Armar body con precio y cuotas
+        var body = { price: precio };
+        if (cuotasNuevas > 0) {
+          body.sale_terms = [{ id: 'INSTALLMENTS', value_struct: { number: cuotasNuevas, unit: 'month' } }];
+        } else {
+          body.sale_terms = [{ id: 'INSTALLMENTS', value_struct: { number: 1, unit: 'month' } }];
+        }
+        var d = await mlPut(mla, body);
         if (d.id || d.price) {
           var pub = ML_PUBS.find(function(p){ return p.mla===mla; });
-          if (pub) pub.precio = precio;
-          toast('✓ '+mla+' → '+fmtP(precio));
+          if (pub) {
+            pub.precio = precio;
+            pub.cuotas = cuotasNuevas;
+            pub.cuotasLabel = cuotasNuevas > 0 ? cuotasNuevas+'c sin interés' : 'Contado';
+          }
+          toast('✓ '+mla+' → '+fmtP(precio)+(cuotasNuevas>0?' · '+cuotasNuevas+' cuotas':''));
           renderMLTable();
         } else throw new Error(d.message || JSON.stringify(d));
       } catch(e) {
