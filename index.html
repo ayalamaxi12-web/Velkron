@@ -1426,13 +1426,8 @@ function renderMLTable() {
       if (!precio || precio <= 0) { toast('Precio inválido', 'error'); return; }
       btn.disabled = true; btn.textContent = '...';
       try {
-        // Armar body con precio y cuotas
+        // Solo modificar precio — cuotas se manejan desde ML directamente
         var body = { price: precio };
-        if (cuotasNuevas > 0) {
-          body.sale_terms = [{ id: 'INSTALLMENTS', value_struct: { number: cuotasNuevas, unit: 'month' } }];
-        } else {
-          body.sale_terms = [{ id: 'INSTALLMENTS', value_struct: { number: 1, unit: 'month' } }];
-        }
         var d = await mlPut(mla, body);
         if (d.id || d.price) {
           var pub = ML_PUBS.find(function(p){ return p.mla===mla; });
