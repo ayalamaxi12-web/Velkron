@@ -1078,19 +1078,25 @@ var ML_SELLER_ID = '';
 var ML_PUBS = []; // publicaciones traídas de ML
 var ML_PAGE = 1;
 
-function mlHeaders() {
-  return { 'Authorization': 'Bearer ' + ML_TOKEN };
+var PROXY_BASE = 'https://ayala-s-erp-production.up.railway.app';
+
+function vkHeaders() {
+  return { 'x-vk-token': ML_TOKEN, 'Content-Type': 'application/json' };
 }
 
 async function mlGet(path) {
-  var r = await fetch('https://api.mercadolibre.com' + path, { headers: mlHeaders() });
+  // Usa el proxy de Railway para evitar CORS
+  var cleanPath = path.replace(/^\//, '');
+  var r = await fetch(PROXY_BASE + '/ml-proxy?path=' + encodeURIComponent(cleanPath), {
+    headers: vkHeaders()
+  });
   return r.json();
 }
 
 async function mlPut(mla, body) {
-  var r = await fetch('https://api.mercadolibre.com/items/' + mla, {
+  var r = await fetch(PROXY_BASE + '/ml-proxy/' + mla, {
     method: 'PUT',
-    headers: Object.assign({'Content-Type':'application/json'}, mlHeaders()),
+    headers: vkHeaders(),
     body: JSON.stringify(body)
   });
   return r.json();
