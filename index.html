@@ -397,11 +397,13 @@ tr:hover td{background:rgba(0,212,255,0.03);}
           <button class="btn-save" style="width:auto;padding:7px 14px;font-size:12px" id="btn-ml-fix-all">⚡ Corregir todos</button>
           <span class="filter-count" id="ml-count">0 publicaciones</span>
         </div>
-        <div class="table-wrap">
-          <table>
+        <div class="table-wrap" style="overflow-x:auto">
+          <table style="min-width:1400px">
             <thead><tr>
               <th>MLA</th><th>SKU</th><th>Título</th><th>Tipo</th>
-              <th>Precio ML actual</th><th>Precio calculado</th>
+              <th>Cuotas</th><th>Visitas</th>
+              <th>Precio actual</th><th>Precio tachado</th>
+              <th>Precio calculado</th><th>Nuevo precio</th>
               <th>Diferencia</th><th>Estado</th><th>Acción</th>
             </tr></thead>
             <tbody id="ml-tbody"></tbody>
@@ -1150,45 +1152,92 @@ async function fetchMLPubs() {
   ML_PUBS = [];
 
   try {
-    // 1. Traer todos los IDs de publicaciones activas
-    var offset = 0, total = 1, ids = [];
-    while (offset < total) {
-      var d = await mlGet('/users/'+ML_SELLER_ID+'/items/search?status=active&limit=100&offset='+offset);
-      total = d.paging ? d.paging.total : 0;
-      if (d.results) ids = ids.concat(d.results);
-      offset += 100;
-      status.textContent = ids.length + '/' + total + ' IDs...';
+    // 1. Traer todos los IDs usando scroll para superar límite de 1000
+    var ids = [];
+    var scrollId = null;
+    var total = 9999;
+
+    while (ids.length < total) {
+      var path = '/users/'+ML_SELLER_ID+'/items/search?status=active&limit=100';
+      if (scrollId) {
+        path += '&scroll_id=' + encodeURIComponent(scrollId);
+      } else {
+        path += '&offset=0';
+      }
+      var d = await mlGet(path);
+      if (d.paging) total = d.paging.total;
       if (!d.results || !d.results.length) break;
+      ids = ids.concat(d.results);
+      scrollId = d.scroll_id || null;
+      status.textContent = ids.length + '/' + total + ' IDs...';
+      // Si no hay scroll_id usar offset clásico (fallback)
+      if (!scrollId && ids.length < total) {
+        // fallback paginación clásica hasta 1000
+        if (ids.length >= 1000) break;
+      }
     }
 
-    status.textContent = ids.length + ' publicaciones, trayendo detalles...';
+    status.textContent = ids.length + ' publicaciones — trayendo detalles...';
 
     // 2. Traer detalles en batches de 20
     for (var i = 0; i < ids.length; i += 20) {
       var batch = ids.slice(i, i+20);
-      var d2 = await mlGet('/items?ids='+batch.join(',')+'&attributes=id,title,price,listing_type_id,seller_sku,attributes,status');
+      var d2 = await mlGet('/items?ids='+batch.join(',')+'&attributes=id,title,price,original_price,listing_type_id,seller_sku,attributes,status,sale_terms,installments');
       if (Array.isArray(d2)) {
         d2.forEach(function(item) {
           if (item.code === 200 && item.body) {
             var body = item.body;
-            // Extraer SKU de seller_sku o atributos
+
+            // Extraer SKU
             var sku = body.seller_sku || '';
             if (!sku && body.attributes) {
               var skuAttr = body.attributes.find(function(a){ return a.id === 'SELLER_SKU'; });
               if (skuAttr) sku = skuAttr.value_name || '';
             }
+
+            // Extraer cuotas
+            var cuotas = 0;
+            var cuotasLabel = 'Contado';
+            if (body.installments && body.installments.quantity > 1) {
+              cuotas = body.installments.quantity;
+              var rate = body.installments.rate || 0;
+              cuotasLabel = cuotas + 'c' + (rate === 0 ? ' sin interés' : ' c/interés');
+            }
+
             ML_PUBS.push({
               mla: body.id,
               titulo: body.title,
               precio: body.price,
+              precioTachado: body.original_price || null,
               tipo: body.listing_type_id,
               sku: sku,
               status: body.status,
+              cuotas: cuotas,
+              cuotasLabel: cuotasLabel,
+              ventas: null,
+              visitas: null,
             });
           }
         });
       }
-      status.textContent = 'Procesando ' + Math.min(i+20, ids.length) + '/' + ids.length + '...';
+      status.textContent = 'Detalles ' + Math.min(i+20, ids.length) + '/' + ids.length + '...';
+    }
+
+    // 3. Traer ventas en batches de 20
+    status.textContent = 'Trayendo ventas...';
+    for (var j = 0; j < ML_PUBS.length; j += 20) {
+      var batchPubs = ML_PUBS.slice(j, j+20);
+      var mlaIds = batchPubs.map(function(p){ return p.mla; });
+      try {
+        var sv = await mlGet('/items/visits?ids=' + mlaIds.join(','));
+        if (sv && !sv.error) {
+          mlaIds.forEach(function(mla) {
+            var pub = ML_PUBS.find(function(p){ return p.mla === mla; });
+            if (pub && sv[mla] !== undefined) pub.visitas = sv[mla];
+          });
+        }
+      } catch(e) {}
+      status.textContent = 'Visitas ' + Math.min(j+20, ML_PUBS.length) + '/' + ML_PUBS.length + '...';
     }
 
     qs('ml-kpi-total').textContent = ML_PUBS.length;
@@ -1210,12 +1259,23 @@ function getMLData() {
   var fT   = qs('ml-filter-tipo').value||'';
   var cfg  = getCfg();
 
+  var cuotas = getCuotas();
   return ML_PUBS.map(function(pub) {
     // Buscar SKU en DATA
     var skuL = (pub.sku||'').toLowerCase().replace(/-x\d+$/i,'').trim();
     var item = DATA.find(function(d){ return d.sku.toLowerCase()===skuL || skuL.includes(d.sku.toLowerCase()) || d.sku.toLowerCase().includes(skuL); });
     var calc = item ? calcMargen(item, cfg) : null;
-    var precioCalc = item ? item.precioML : 0;
+
+    // Precio calculado según cuotas de la publicación
+    var precioCalc = 0;
+    if (item) {
+      if (pub.cuotas === 3)       precioCalc = precioConCuotas(item.precioML, cuotas.c3);
+      else if (pub.cuotas === 6)  precioCalc = precioConCuotas(item.precioML, cuotas.c6);
+      else if (pub.cuotas === 9)  precioCalc = precioConCuotas(item.precioML, cuotas.c9);
+      else if (pub.cuotas === 12) precioCalc = precioConCuotas(item.precioML, cuotas.c12);
+      else                         precioCalc = item.precioML;
+    }
+
     var diff = precioCalc && pub.precio ? Math.abs(pub.precio - precioCalc) / precioCalc * 100 : null;
     var estado = !item ? 'nosku' : diff !== null && diff > 1.5 ? 'diff' : 'ok';
     return { pub:pub, item:item, calc:calc, precioCalc:precioCalc, diff:diff, estado:estado };
@@ -1260,22 +1320,30 @@ function renderMLTable() {
       ? '<button class="btn-save vk-fix-btn" data-mla="'+r.pub.mla+'" data-precio="'+r.precioCalc+'" style="width:auto;padding:4px 12px;font-size:11px">↻ Corregir</button>'
       : '—';
     return '<tr>'
-      + '<td class="mono" style="font-size:11px"><a href="https://articulo.mercadolibre.com.ar/'+r.pub.mla+'" target="_blank" style="color:var(--accent);text-decoration:none">'+r.pub.mla+'</a></td>'
-      + '<td class="mono" style="font-size:10px;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(r.pub.sku||'—')+'</td>'
-      + '<td style="font-size:11px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+r.pub.titulo+'</td>'
-      + '<td style="font-size:11px">'+(TIPOS[r.pub.tipo]||r.pub.tipo||'—')+'</td>'
-      + '<td class="mono">'+fmtP(r.pub.precio)+'</td>'
-      + '<td class="mono" style="color:var(--accent)">'+(r.precioCalc?fmtP(r.precioCalc):'—')+'</td>'
-      + '<td>'+diffStr+'</td>'
-      + '<td>'+estadoBadge+'</td>'
-      + '<td>'+accion+'</td>'
+      + '<td class="mono" style="font-size:11px;white-space:nowrap"><a href="https://articulo.mercadolibre.com.ar/'+r.pub.mla+'" target="_blank" style="color:var(--accent);text-decoration:none">'+r.pub.mla+' ↗</a></td>'
+      + '<td class="mono" style="font-size:10px;white-space:nowrap">'+(r.pub.sku||'—')+'</td>'
+      + '<td style="font-size:11px;min-width:180px;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+r.pub.titulo+'">'+r.pub.titulo+'</td>'
+      + '<td style="font-size:11px;white-space:nowrap">'+(TIPOS[r.pub.tipo]||r.pub.tipo||'—')+'</td>'
+      + '<td style="font-size:11px;white-space:nowrap;color:'+(r.pub.cuotas>0?'var(--yellow)':'var(--muted)')+'">'+r.pub.cuotasLabel+'</td>'
+      + '<td class="mono" style="color:var(--muted2);white-space:nowrap">'+(r.pub.visitas!==null?fmtN(r.pub.visitas):'—')+'</td>'
+      + '<td class="mono" style="white-space:nowrap">'+fmtP(r.pub.precio)+'</td>'
+      + '<td class="mono" style="white-space:nowrap;color:var(--muted);text-decoration:line-through">'+(r.pub.precioTachado?fmtP(r.pub.precioTachado):'—')+'</td>'
+      + '<td class="mono" style="color:var(--accent);white-space:nowrap">'+(r.precioCalc?fmtP(r.precioCalc):'—')+'</td>'
+      + '<td><input type="number" value="'+(r.precioCalc||r.pub.precio)+'" class="config-input vk-precio-input" data-mla="'+r.pub.mla+'" style="width:110px;padding:4px 8px;font-size:11px"></td>'
+      + '<td style="white-space:nowrap">'+diffStr+'</td>'
+      + '<td style="white-space:nowrap">'+estadoBadge+'</td>'
+      + '<td style="white-space:nowrap"><button class="btn-save vk-fix-btn" data-mla="'+r.pub.mla+'" style="width:auto;padding:4px 12px;font-size:11px">↻ Aplicar</button></td>'
       + '</tr>';
   }).join('');
 
   tbody.querySelectorAll('.vk-fix-btn').forEach(function(btn) {
     btn.addEventListener('click', async function() {
       var mla = btn.dataset.mla;
-      var precio = parseFloat(btn.dataset.precio);
+      // Leer precio del input de la misma fila
+      var row = btn.closest('tr');
+      var inp = row ? row.querySelector('.vk-precio-input') : null;
+      var precio = inp ? parseFloat(inp.value) : 0;
+      if (!precio || precio <= 0) { toast('Precio inválido', 'error'); return; }
       btn.disabled = true; btn.textContent = '...';
       try {
         var d = await mlPut(mla, { price: precio });
@@ -1287,7 +1355,7 @@ function renderMLTable() {
         } else throw new Error(d.message || JSON.stringify(d));
       } catch(e) {
         toast('Error: '+e.message, 'error');
-        btn.disabled = false; btn.textContent = '↻ Corregir';
+        btn.disabled = false; btn.textContent = '↻ Aplicar';
       }
     });
   });
