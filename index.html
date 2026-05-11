@@ -1153,21 +1153,37 @@ async function fetchMLPubs() {
   ML_PUBS = [];
 
   try {
-    // 1. Traer todos los IDs — paginación clásica con offset (scroll_id no funciona via proxy)
+    // 1. Traer todos los IDs — scroll directo al browser (sin CORS en GET search)
+    // ML permite scroll_id para superar el límite de 1000
     var ids = [];
     var total = 9999;
-    var offset = 0;
+    var scrollId = null;
+    var intentos = 0;
 
-    while (offset < total && offset < 5000) {
-      var d = await mlGet('/users/'+ML_SELLER_ID+'/items/search?status=active&limit=100&offset='+offset);
+    while (ids.length < total && intentos < 60) {
+      intentos++;
+      var searchPath;
+      if (scrollId) {
+        searchPath = 'https://api.mercadolibre.com/users/'+ML_SELLER_ID+'/items/search?status=active&limit=100&scroll_id='+encodeURIComponent(scrollId);
+      } else {
+        searchPath = 'https://api.mercadolibre.com/users/'+ML_SELLER_ID+'/items/search?status=active&limit=100&offset=0';
+      }
+      // Llamada directa al browser (GET IDs no tiene CORS issue)
+      var resp = await fetch(searchPath, { headers: { 'Authorization': 'Bearer ' + ML_TOKEN } });
+      var d = await resp.json();
       if (d.paging) total = d.paging.total;
       if (!d.results || !d.results.length) break;
-      // Deduplicar IDs
       d.results.forEach(function(id) {
         if (ids.indexOf(id) === -1) ids.push(id);
       });
-      offset += 100;
+      scrollId = d.scroll_id || null;
       status.textContent = ids.length + '/' + total + ' IDs...';
+      // Si no hay scroll_id y llegamos a 1000, no podemos más por offset
+      if (!scrollId && ids.length >= 1000) {
+        status.textContent = ids.length + ' IDs (límite ML sin scroll)';
+        break;
+      }
+      if (!scrollId) break;
     }
 
     status.textContent = ids.length + ' publicaciones — trayendo detalles...';
@@ -1195,11 +1211,9 @@ async function fetchMLPubs() {
 
             // Extraer tipo
             var tipo = body.listing_type_id || '';
-            var tipoLabel = tipo === 'gold_pro' ? 'Premium'
-                          : tipo === 'gold_premium' ? 'Premium'
-                          : tipo === 'gold_special' ? 'Clásica'
-                          : tipo === 'gold' ? 'Clásica'
-                          : tipo || 'Clásica';
+            var tipoLabel = (tipo === 'gold_pro' || tipo === 'gold_premium') ? 'Premium'
+                          : (tipo === 'gold_special' || tipo === 'gold' || tipo === 'silver') ? 'Clásica'
+                          : tipo ? tipo : 'Clásica';
 
             // Extraer cuotas desde sale_terms
             var cuotas = 0;
@@ -1350,7 +1364,7 @@ function renderMLTable() {
       : '<span class="margen-badge mg-excelente">✓ OK</span>';
 // accion handled inline
     return '<tr>'
-      + '<td class="mono" style="font-size:11px;white-space:nowrap"><a href="https://articulo.mercadolibre.com.ar/MLA-'+r.pub.mla.replace('MLA','').replace(/^0+/,'')+'-_JM" target="_blank" style="color:var(--accent);text-decoration:none">'+r.pub.mla+' ↗</a></td>'
+      + '<td class="mono" style="font-size:11px;white-space:nowrap"><a href="https://www.mercadolibre.com.ar/p/'+r.pub.mla+'" target="_blank" style="color:var(--accent);text-decoration:none">'+r.pub.mla+' ↗</a></td>'
       + '<td class="mono" style="font-size:10px;white-space:nowrap">'+(r.pub.sku||'—')+(r.multiplier>1?' <span style="color:var(--accent);font-size:9px">×'+r.multiplier+'</span>':'')+'</td>'
       + '<td style="font-size:11px;min-width:180px;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+r.pub.titulo+'">'+r.pub.titulo+'</td>'
       + '<td style="font-size:11px;white-space:nowrap">'+(r.pub.tipo||'—')+'</td>'
